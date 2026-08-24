@@ -85,6 +85,22 @@
   }
   .admin-chip .dot{ width:8px; height:8px; border-radius:50%; background:#7FE0A0; }
 
+  /* ---------- Maintenance mode ---------- */
+  .maintenance-banner{
+    background: var(--signal); color:#fff; font-size:.82rem; font-weight:600;
+    padding: 9px 24px; display:flex; align-items:center; gap:8px; justify-content:center; text-align:center;
+  }
+  .btn-maint{ background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.55); }
+  .btn-maint:hover{ background: rgba(255,255,255,.1); }
+  .btn-maint.is-on{ background:#fff; color: var(--signal); border-color:#fff; }
+  .maintenance-page{
+    text-align:center; padding: 90px 20px; color: var(--ink-soft);
+  }
+  .maintenance-page svg{ opacity:.5; margin-bottom:16px; }
+  .maintenance-page h2{ color:var(--navy); margin:0 0 8px; font-size:1.3rem; }
+  .maintenance-page p{ margin:0; font-size:.92rem; max-width:420px; margin:0 auto; }
+  .toolbar[hidden], .grid[hidden]{ display:none; }
+
   /* ---------- Toolbar ---------- */
   .toolbar{
     max-width: 1180px; margin: 22px auto 0; padding: 0 24px;
@@ -273,6 +289,11 @@
   </div>
 </header>
 
+<div id="maintenanceBanner" class="maintenance-banner" hidden>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86l-8.18 14.18A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="#fff" stroke-width="1.6"/></svg>
+  <span>โหมดปรับปรุงเปิดอยู่ — ผู้เยี่ยมชมทั่วไปจะเห็นหน้าปิดปรับปรุงแทนข้อมูลอาคาร</span>
+</div>
+
 <div class="toolbar">
   <div class="search-wrap">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#1B2430" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="#1B2430" stroke-width="2" stroke-linecap="round"/></svg>
@@ -296,6 +317,11 @@
     <svg width="52" height="52" viewBox="0 0 24 24" fill="none"><path d="M4 21V9l8-5 8 5v12" stroke="#1B2430" stroke-width="1.4"/><path d="M9 21v-6h6v6" stroke="#1B2430" stroke-width="1.4"/></svg>
     <h3 id="emptyTitle">ยังไม่มีข้อมูลอาคาร</h3>
     <p id="emptySub">เข้าสู่ระบบผู้ดูแลเพื่อเริ่มเพิ่มข้อมูลอาคารเรียน</p>
+  </div>
+  <div class="maintenance-page" id="maintenancePage" hidden>
+    <svg width="60" height="60" viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="#16324F" stroke-width="1.4"/></svg>
+    <h2>อยู่ระหว่างปรับปรุงระบบ</h2>
+    <p>ขออภัยในความไม่สะดวก ขณะนี้ระบบข้อมูลอาคารเรียนกำลังปรับปรุง กรุณากลับมาใหม่ภายหลัง</p>
   </div>
 </main>
 
@@ -434,6 +460,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const buildingsRef = firebase.database().ref('buildings');
+const maintenanceRef = firebase.database().ref('settings/maintenance');
 
 let state = {
   buildings: [],
@@ -443,6 +470,7 @@ let state = {
   filterFloor: "",
   editingId: null,
   formImage: null,
+  maintenance: false,
   loaded: false
 };
 let pendingConfirm = null;
@@ -499,6 +527,10 @@ function startRealtimeSync(){
     showToast('เชื่อมต่อฐานข้อมูลไม่สำเร็จ กรุณาตรวจสอบการตั้งค่า Firebase');
     render();
   });
+  maintenanceRef.on('value', (snapshot)=>{
+    state.maintenance = snapshot.val() === true;
+    render();
+  });
 }
 async function persistData(){
   try{
@@ -512,6 +544,14 @@ async function persistData(){
     return false;
   }
 }
+async function toggleMaintenance(){
+  try{
+    await maintenanceRef.set(!state.maintenance);
+  }catch(err){
+    console.error('Firebase write error:', err);
+    showToast('ไม่สามารถเปลี่ยนสถานะโหมดปรับปรุงได้');
+  }
+}
 
 /* ---------------- auth ---------------- */
 function renderAuthArea(){
@@ -521,8 +561,14 @@ function renderAuthArea(){
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;">
         <div class="admin-chip"><span class="dot"></span> โหมดผู้ดูแล</div>
+        <button class="btn btn-maint${state.maintenance ? ' is-on' : ''}" id="maintBtn">${state.maintenance ? 'ปิดโหมดปรับปรุง' : 'เปิดโหมดปรับปรุง'}</button>
         <button class="btn btn-outline" id="logoutBtn">ออกจากระบบ</button>
       </div>`;
+    document.getElementById('maintBtn').addEventListener('click', async ()=>{
+      const goingOn = !state.maintenance;
+      await toggleMaintenance();
+      showToast(goingOn ? 'เปิดโหมดปรับปรุงแล้ว ผู้เยี่ยมชมจะเห็นหน้าปิดปรับปรุง' : 'ปิดโหมดปรับปรุงแล้ว', 'ok');
+    });
     document.getElementById('logoutBtn').addEventListener('click', ()=>{
       state.isAdmin = false;
       renderAuthArea();
@@ -604,9 +650,25 @@ function iconFloors(){
   return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 20h18M5 20V9l7-5 7 5v11" stroke="#5B6472" stroke-width="1.6"/></svg>`;
 }
 function render(){
-  updateTypeFilterOptions();
+  renderAuthArea();
+  const banner = document.getElementById('maintenanceBanner');
+  const toolbar = document.querySelector('.toolbar');
+  const maintPage = document.getElementById('maintenancePage');
   const grid = document.getElementById('grid');
   const empty = document.getElementById('emptyState');
+
+  const showMaintenancePage = state.maintenance && !state.isAdmin;
+  banner.hidden = !(state.maintenance && state.isAdmin);
+  toolbar.hidden = showMaintenancePage;
+  maintPage.hidden = !showMaintenancePage;
+  grid.hidden = showMaintenancePage;
+  if(showMaintenancePage){
+    empty.hidden = true;
+    document.getElementById('metaCount').innerHTML = '';
+    return;
+  }
+
+  updateTypeFilterOptions();
   const list = state.loaded ? getFiltered() : [];
   document.getElementById('metaCount').innerHTML =
     state.loaded ? `แสดง <b>${list.length}</b> จาก <b>${state.buildings.length}</b> อาคาร` : 'กำลังโหลดข้อมูล...';
