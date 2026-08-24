@@ -381,12 +381,12 @@
             <textarea id="description" placeholder="รายละเอียดการใช้งาน ห้องเรียน หน่วยงานภายในอาคาร ฯลฯ"></textarea>
           </div>
           <div class="field full">
-            <label>รูปภาพอาคาร (สูงสุด 3 รูป)</label>
+            <label>รูปภาพอาคาร</label>
             <div class="image-upload" id="imageUpload">
               <label class="upload-btn">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#16324F" stroke-width="2" stroke-linecap="round"/></svg>
                 เพิ่มรูป
-                <input type="file" id="imageInput" accept="image/*" multiple>
+                <input type="file" id="imageInput" accept="image/*">
               </label>
             </div>
             <div class="upload-hint">รูปจะถูกย่อขนาดอัตโนมัติเพื่อประหยัดพื้นที่จัดเก็บบนฐานข้อมูล</div>
@@ -442,7 +442,7 @@ let state = {
   filterType: "",
   filterFloor: "",
   editingId: null,
-  formImages: [],
+  formImage: null,
   loaded: false
 };
 let pendingConfirm = null;
@@ -625,11 +625,11 @@ function render(){
   }
   empty.hidden = true;
   grid.innerHTML = list.map(b=>{
-    const thumb = b.images && b.images.length ? `style="background-image:url('${b.images[0]}')"` : '';
-    const thumbClass = b.images && b.images.length ? 'card-thumb' : 'card-thumb no-image';
+    const thumb = b.image ? `style="background-image:url('${b.image}')"` : '';
+    const thumbClass = b.image ? 'card-thumb' : 'card-thumb no-image';
     return `
     <button class="card" data-id="${b.id}">
-      <div class="${thumbClass}" ${thumb}>${b.images && b.images.length ? '' : iconBuilding()}</div>
+      <div class="${thumbClass}" ${thumb}>${b.image ? '' : iconBuilding()}</div>
       <div class="card-body">
         ${b.type ? `<span class="card-type">${escapeHtml(b.type)}</span>` : ''}
         <h3 class="card-title">${escapeHtml(b.name)}</h3>
@@ -647,8 +647,8 @@ function openDetail(id){
   const b = state.buildings.find(x=>x.id === id);
   if(!b) return;
   document.getElementById('detailTitle').textContent = b.name;
-  const gallery = (b.images && b.images.length)
-    ? `<div class="sheet-gallery">${b.images.map(src=>`<img src="${src}" alt="${escapeHtml(b.name)}">`).join('')}</div>`
+  const gallery = b.image
+    ? `<div class="sheet-gallery"><img src="${b.image}" alt="${escapeHtml(b.name)}"></div>`
     : `<div class="no-img">ไม่มีรูปภาพประกอบ</div>`;
   const fields = [
     ['ประเภทอาคาร', b.type || '-'],
@@ -709,7 +709,7 @@ function openForm(id){
   document.getElementById('location').value = b ? (b.location||'') : '';
   document.getElementById('facilities').value = b && b.facilities ? b.facilities.join(', ') : '';
   document.getElementById('description').value = b ? (b.description||'') : '';
-  state.formImages = b && b.images ? [...b.images] : [];
+  state.formImage = b && b.image ? b.image : null;
   document.getElementById('f_name').classList.remove('has-error');
   document.getElementById('f_floors').classList.remove('has-error');
   renderFormImages();
@@ -718,24 +718,22 @@ function openForm(id){
 }
 function renderFormImages(){
   const wrap = document.getElementById('imageUpload');
-  const thumbs = state.formImages.map((src,i)=>`
-    <div class="thumb-item"><img src="${src}"><button type="button" data-idx="${i}" class="rm-img" aria-label="ลบรูป">✕</button></div>
-  `).join('');
-  const addBtn = state.formImages.length < 3 ? `
-    <label class="upload-btn">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#16324F" stroke-width="2" stroke-linecap="round"/></svg>
-      เพิ่มรูป
-      <input type="file" id="imageInput" accept="image/*" multiple>
-    </label>` : '';
-  wrap.innerHTML = thumbs + addBtn;
-  wrap.querySelectorAll('.rm-img').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      state.formImages.splice(Number(btn.dataset.idx), 1);
+  if(state.formImage){
+    wrap.innerHTML = `<div class="thumb-item"><img src="${state.formImage}"><button type="button" id="rmImg" aria-label="ลบรูป">✕</button></div>`;
+    document.getElementById('rmImg').addEventListener('click', ()=>{
+      state.formImage = null;
       renderFormImages();
     });
-  });
-  const input = document.getElementById('imageInput');
-  if(input) input.addEventListener('change', handleImageUpload);
+  }else{
+    wrap.innerHTML = `
+      <label class="upload-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#16324F" stroke-width="2" stroke-linecap="round"/></svg>
+        เพิ่มรูป
+        <input type="file" id="imageInput" accept="image/*">
+      </label>`;
+    const input = document.getElementById('imageInput');
+    if(input) input.addEventListener('change', handleImageUpload);
+  }
 }
 function compressImage(file){
   return new Promise((resolve, reject)=>{
@@ -760,17 +758,13 @@ function compressImage(file){
   });
 }
 async function handleImageUpload(e){
-  const files = Array.from(e.target.files || []);
-  const remain = 3 - state.formImages.length;
-  const toProcess = files.slice(0, remain);
-  for(const file of toProcess){
-    try{
-      const dataUrl = await compressImage(file);
-      state.formImages.push(dataUrl);
-    }catch(err){
-      console.error(err);
-      showToast('ไม่สามารถประมวลผลรูปภาพได้');
-    }
+  const file = (e.target.files || [])[0];
+  if(!file) return;
+  try{
+    state.formImage = await compressImage(file);
+  }catch(err){
+    console.error(err);
+    showToast('ไม่สามารถประมวลผลรูปภาพได้');
   }
   renderFormImages();
 }
@@ -798,7 +792,7 @@ async function saveBuilding(){
     location: document.getElementById('location').value.trim(),
     facilities: facilitiesArr,
     description: document.getElementById('description').value.trim(),
-    images: state.formImages,
+    image: state.formImage,
     updatedAt: Date.now()
   };
 
