@@ -222,6 +222,8 @@
 
   footer.sitefoot{ text-align:center; padding: 20px; color: var(--ink-soft); font-size:.75rem; }
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -383,6 +385,19 @@
 const ADMIN_CODE = "123456";
 const SUGGESTED_TYPES = ["อาคารเรียน","อาคารปฏิบัติการ","อาคารสำนักงาน","หอประชุม","โรงยิม/พลศึกษา","หอสมุด","โรงอาหาร","หอพัก"];
 
+const firebaseConfig = {
+  apiKey: "AIzaSyBkhoNw-O-hQ3M3UzGeCUZOXAoUm18MQQo",
+  authDomain: "fftty2552-32df7.firebaseapp.com",
+  databaseURL: "https://fftty2552-32df7-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "fftty2552-32df7",
+  storageBucket: "fftty2552-32df7.firebasestorage.app",
+  messagingSenderId: "756631228110",
+  appId: "1:756631228110:web:3246697bb6880bb4700a9f",
+  measurementId: "G-5EGWY2YFDF"
+};
+firebase.initializeApp(firebaseConfig);
+const buildingsRef = firebase.database().ref('buildings');
+
 let state = {
   buildings: [],
   isAdmin: false,
@@ -433,32 +448,29 @@ document.getElementById('confirmOk').addEventListener('click', ()=>{
   if(fn) fn();
 });
 
-/* ---------------- storage sync ---------------- */
-async function loadData(silent){
-  try{
-    const res = await window.storage.get('buildings', true);
-    const data = res && res.value ? JSON.parse(res.value) : [];
-    const newStr = JSON.stringify(data);
-    const oldStr = JSON.stringify(state.buildings);
-    if(newStr !== oldStr){
-      state.buildings = data;
-      render();
-    }
+/* ---------------- firebase realtime sync ---------------- */
+function startRealtimeSync(){
+  buildingsRef.on('value', (snapshot)=>{
+    const val = snapshot.val();
+    state.buildings = val ? Object.values(val) : [];
     state.loaded = true;
-  }catch(err){
-    // key not found yet = first run, treat as empty
-    state.buildings = state.buildings || [];
+    render();
+  }, (err)=>{
+    console.error('Firebase read error:', err);
     state.loaded = true;
-    if(!silent) render();
-  }
+    showToast('เชื่อมต่อฐานข้อมูลไม่สำเร็จ กรุณาตรวจสอบการตั้งค่า Firebase');
+    render();
+  });
 }
 async function persistData(){
   try{
-    const result = await window.storage.set('buildings', JSON.stringify(state.buildings), true);
-    if(!result) throw new Error('save failed');
+    // store as an object keyed by id so concurrent edits merge instead of overwrite
+    const obj = {};
+    state.buildings.forEach(b => { obj[b.id] = b; });
+    await buildingsRef.set(obj);
     return true;
   }catch(err){
-    console.error('Storage error:', err);
+    console.error('Firebase write error:', err);
     return false;
   }
 }
@@ -714,10 +726,7 @@ document.getElementById('filterFloor').addEventListener('change', (e)=>{ state.f
 /* ---------------- init & sync ---------------- */
 renderAuthArea();
 render();
-loadData().then(render);
-setInterval(()=> loadData(true), 8000);
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) loadData(true); });
-window.addEventListener('focus', ()=> loadData(true));
+startRealtimeSync();
 </script>
 </body>
 </html>
