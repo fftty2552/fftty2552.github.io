@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>NativePy: Python ในภาษาประจำชาติ</title>
+<title>เขียนโค้ดด้วยภาษาที่เลือก (beta test)</title></title>
 <style>
 :root{--bg:#faf8f5;--fg:#1f1d1a;--mut:#6b665f;--card:#fff;--bd:#e4dfd7;--ac:#c2410c;--acfg:#fff;--code:#1e1e24;--codefg:#e8e6e3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171614;--fg:#ece8e1;--mut:#9a948a;--card:#211f1c;--bd:#38342f;--ac:#fb923c;--acfg:#1a1209;--code:#0e0e11}}
@@ -26,22 +26,22 @@ textarea{background:var(--card);color:var(--fg);resize:vertical;outline:none}
 pre{background:var(--code);color:var(--codefg)}
 details{margin-top:16px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 14px}
 summary{cursor:pointer;font-weight:600}
-.map{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 14px;margin-top:10px;font-size:.9rem}
+.map{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 14px;margin-top:10px;font-size:.9rem}
 .map span{color:var(--mut)}
 .note{color:var(--mut);font-size:.9rem;margin-top:12px}
 </style>
 </head>
 <body>
 <main>
-<h1>NativePy: Python ในภาษาประจำชาติ</h1>
-<p class="sub">เขียนโค้ดด้วยคำสั่งภาษาของคุณ แล้วแปลงเป็น Python มาตรฐาน หรือแปลงกลับจาก Python</p>
+<h1>-_-</h1>
+<p class="sub">เขียนโค้ดด้วยภาษาที่เลือก</p>
 
 <div class="bar">
   <label>ภาษา <select id="lang"></select></label>
   <label>ทิศทาง
     <select id="dir">
-      <option value="fwd">ภาษาประจำชาติ → Python</option>
-      <option value="rev">Python → ภาษาประจำชาติ</option>
+      <option value="fwd">ภาษา → Python</option>
+      <option value="rev">Python → ภาษา</option>
     </select>
   </label>
   <button id="swap">สลับช่อง</button>
@@ -52,7 +52,7 @@ summary{cursor:pointer;font-weight:600}
   <div class="pane"><div class="hd"><span id="outT">โค้ด Python</span><button class="pri" id="copy">คัดลอก</button></div><pre><code id="dst"></code></pre></div>
 </div>
 
-<p class="note"> ============</p>
+<p class="note">แปลงโค้ดแล้วคัดลอกไปใส่ใน python</p>
 
 <details><summary>ตารางคำสั่งของภาษานี้</summary><div class="map" id="map"></div></details>
 </main>
@@ -111,6 +111,48 @@ para i en rango(5):
         imprimir("saltado", i)
 ` }
 };
+
+// คำพ้อง: หนึ่งคำสั่งของ Python ใช้ได้หลายคำ (คำแรกของแต่ละรายการคือคำหลักที่ใช้ตอนแปลงกลับ)
+const SYN_TH = {
+  print:["ปริ้น","ปริ้นท์","ปริ๊น","ปริ๊นท์","แสดง","แสดงผล"],
+  input:["อินพุต","ป้อน"],
+  if:["หาก","ถ้าหาก"],
+  elif:["มิฉะนั้นถ้า","ไม่งั้นถ้า"],
+  else:["ไม่งั้น","นอกนั้น"],
+  for:["วนซ้ำ","วน"],
+  in:["อยู่ใน"],
+  while:["ตราบเท่าที่","ตราบใดที่"],
+  def:["ฟังก์ชัน","สร้างฟังก์ชัน"],
+  return:["ส่งคืน"],
+  class:["ชั้น"],
+  import:["อิมพอร์ต"],
+  and:["แอนด์"],
+  or:["ออร์"],
+  not:["ไม่ใช่"],
+  is:["ก็คือ"],
+  True:["ใช่","ทรู"],
+  False:["ผิด"],
+  None:["ไม่มี"],
+  pass:["ข้าม"],
+  break:["เบรก","ออกจากลูป"],
+  continue:["ข้ามรอบ","ทำต่อ"],
+  try:["พยายาม"],
+  except:["จับข้อผิดพลาด"],
+  finally:["ท้ายสุด"],
+  raise:["โยนข้อผิดพลาด"],
+  lambda:["แลมด้า"],
+  range:["เรนจ์"],
+  len:["เลน"],
+  int:["อินท์"],
+  float:["ฟลอต"],
+  str:["สตริง"],
+  list:["ลิสต์"],
+  dict:["ดิกต์"],
+  max:["สูงสุด","แมกซ์"],
+  min:["ต่ำสุด","มิน"],
+  sorted:["จัดเรียง"]
+};
+for (const py in SYN_TH) for (const w of SYN_TH[py]) PACKS.th.map[w] = py;
 
 const IDENT = /[\p{L}_][\p{L}\p{M}\p{N}_]*/uy;
 
@@ -181,7 +223,7 @@ function translate(src, map) {
 const $ = id => document.getElementById(id);
 let cur = "th";
 
-function reverse(map) { const r = {}; for (const k in map) r[map[k]] = k; return r; }
+function reverse(map) { const r = {}; for (const k in map) if (!(map[k] in r)) r[map[k]] = k; return r; }
 
 function update() {
   const p = PACKS[cur], fwd = $("dir").value === "fwd";
@@ -192,10 +234,12 @@ function update() {
 
 function drawMap() {
   const box = $("map"); box.textContent = "";
-  for (const k in PACKS[cur].map) {
+  const g = {};
+  for (const k in PACKS[cur].map) (g[PACKS[cur].map[k]] ||= []).push(k);
+  for (const k in g) {
     const d = document.createElement("div");
-    d.append(k + " ");
-    const s = document.createElement("span"); s.textContent = "→ " + PACKS[cur].map[k];
+    d.append(g[k].join(" / ") + " ");
+    const s = document.createElement("span"); s.textContent = "→ " + k;
     d.appendChild(s); box.appendChild(d);
   }
 }
