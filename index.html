@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>เขียนโค้ดด้วยภาษาที่เลือก (beta test)</title></title>
+<title> เขียนโค้ดด้วยภาษาที่เลือก (beta test)</title></title>
 <style>
 :root{--bg:#faf8f5;--fg:#1f1d1a;--mut:#6b665f;--card:#fff;--bd:#e4dfd7;--ac:#c2410c;--acfg:#fff;--code:#1e1e24;--codefg:#e8e6e3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171614;--fg:#ece8e1;--mut:#9a948a;--card:#211f1c;--bd:#38342f;--ac:#fb923c;--acfg:#1a1209;--code:#0e0e11}}
@@ -33,8 +33,8 @@ summary{cursor:pointer;font-weight:600}
 </head>
 <body>
 <main>
-<h1>-_-</h1>
-<p class="sub">เขียนโค้ดด้วยภาษาที่เลือก</p>
+<h1>เขียนโค้ดด้วยภาษาที่เลือก (beta test)</h1>
+<p class="sub">this is a project</p>
 
 <div class="bar">
   <label>ภาษา <select id="lang"></select></label>
@@ -52,7 +52,7 @@ summary{cursor:pointer;font-weight:600}
   <div class="pane"><div class="hd"><span id="outT">โค้ด Python</span><button class="pri" id="copy">คัดลอก</button></div><pre><code id="dst"></code></pre></div>
 </div>
 
-<p class="note">แปลงโค้ดแล้วคัดลอกไปใส่ใน python</p>
+<p class="note">คัดลอกโค้ดที่แปลงไปใส่ python</p>
 
 <details><summary>ตารางคำสั่งของภาษานี้</summary><div class="map" id="map"></div></details>
 </main>
@@ -154,10 +154,42 @@ const SYN_TH = {
 };
 for (const py in SYN_TH) for (const w of SYN_TH[py]) PACKS.th.map[w] = py;
 
+// ครบชุด: keyword ที่เหลือ, builtin ทั้งหมด, ชื่อ exception
+Object.assign(PACKS.th.map, {
+  "ลบ":"del","ส่วนกลาง":"global","นอกฟังก์ชัน":"nonlocal","ยืนยัน":"assert","ส่งค่า":"yield","อะซิงค์":"async","รอ":"await",
+  "ทุกตัว":"all","บางตัว":"any","บูล":"bool","แปลงเป็นอักษร":"chr","รหัสอักษร":"ord",
+  "ฐานสอง":"bin","ฐานสิบหก":"hex","ฐานแปด":"oct","หารเอาเศษ":"divmod",
+  "ประเมิน":"eval","สั่งรัน":"exec","กรอง":"filter","แมป":"map","จับคู่":"zip","กลับด้าน":"reversed",
+  "เซต":"set","ทูเพิล":"tuple","ชนิดข้อมูล":"type","เป็นชนิด":"isinstance","เป็นคลาสย่อย":"issubclass",
+  "มีแอตทริบิวต์":"hasattr","ดึงแอตทริบิวต์":"getattr","ตั้งแอตทริบิวต์":"setattr","ลบแอตทริบิวต์":"delattr",
+  "ยกกำลัง":"pow","ซูเปอร์":"super","ถัดไป":"next","ตัววนซ้ำ":"iter","รหัสวัตถุ":"id",
+  "จัดรูปแบบ":"format","รายชื่อสมาชิก":"dir","ช่วยเหลือ":"help","แฮช":"hash","เรียกได้":"callable",
+  "วัตถุ":"object","คุณสมบัติ":"property","เมธอดสถิต":"staticmethod","เมธอดคลาส":"classmethod",
+  "ไบต์":"bytes","อาร์เรย์ไบต์":"bytearray","จำนวนเชิงซ้อน":"complex","เซตคงที่":"frozenset","ชิ้นส่วน":"slice",
+  "ตัวแปรทั้งหมด":"vars","ตัวแปรส่วนกลาง":"globals","ตัวแปรท้องถิ่น":"locals","แทนค่า":"repr","คอมไพล์":"compile",
+  "ข้อผิดพลาด":"Exception","ข้อผิดพลาดค่า":"ValueError","ข้อผิดพลาดชนิด":"TypeError","ข้อผิดพลาดคีย์":"KeyError",
+  "ข้อผิดพลาดดัชนี":"IndexError","หารด้วยศูนย์":"ZeroDivisionError","ข้อผิดพลาดชื่อ":"NameError",
+  "ไม่พบไฟล์":"FileNotFoundError","นำเข้าไม่ได้":"ImportError","ข้อผิดพลาดแอตทริบิวต์":"AttributeError",
+  "หยุดวนซ้ำ":"StopIteration","ผู้ใช้ขัดจังหวะ":"KeyboardInterrupt","ยืนยันไม่ผ่าน":"AssertionError","ข้อผิดพลาดขณะรัน":"RuntimeError","ข้อผิดพลาดระบบ":"OSError"
+});
+
+// ชื่อเมธอดที่เขียนหลังจุด (x.ชื่อ) ใช้ตารางแยกจาก keyword/builtin
+PACKS.th.methods = {
+  "เพิ่ม":"append","ขยาย":"extend","แทรก":"insert","เอาออก":"remove","ดึงออก":"pop","ล้าง":"clear",
+  "หาตำแหน่ง":"index","นับ":"count","เรียงตัวเอง":"sort","กลับลำดับ":"reverse","คัดลอก":"copy",
+  "แยก":"split","รวมด้วย":"join","ตัดขอบ":"strip","ตัดขอบซ้าย":"lstrip","ตัดขอบขวา":"rstrip","แทนที่":"replace",
+  "ตัวพิมพ์ใหญ่":"upper","ตัวพิมพ์เล็ก":"lower","หัวเรื่อง":"title","ขึ้นต้นด้วย":"startswith","ลงท้ายด้วย":"endswith",
+  "ค้นหา":"find","จัดรูปแบบ":"format","เป็นตัวเลข":"isdigit","เป็นตัวอักษร":"isalpha",
+  "แยกบรรทัด":"splitlines","เข้ารหัส":"encode","ถอดรหัส":"decode",
+  "คีย์":"keys","ค่าทั้งหมด":"values","คู่ทั้งหมด":"items","ดึงค่า":"get","อัปเดต":"update","ตั้งค่าเริ่ม":"setdefault",
+  "เพิ่มเข้าเซต":"add","รวมเซต":"union","จุดตัดเซต":"intersection","ผลต่างเซต":"difference",
+  "อ่าน":"read","เขียน":"write","อ่านบรรทัด":"readline","อ่านทุกบรรทัด":"readlines","ปิด":"close"
+};
+
 const IDENT = /[\p{L}_][\p{L}\p{M}\p{N}_]*/uy;
 
 // แปลง NAME token เท่านั้น ไม่แตะ string/comment (นิพจน์ใน f-string จะถูกแปลด้วย)
-function translate(src, map) {
+function translate(src, map, mmap) {
   let out = "", i = 0;
   const n = src.length;
   while (i < n) {
@@ -175,7 +207,8 @@ function translate(src, map) {
         const r = readString(src, e, w); out += w + r.text.slice(0); i = r.end; // w คือ prefix
         continue;
       }
-      out += Object.prototype.hasOwnProperty.call(map, w) ? map[w] : w;
+      const tbl = (out.slice(-1) === "." && mmap) ? mmap : map;
+      out += Object.prototype.hasOwnProperty.call(tbl, w) ? tbl[w] : w;
       i = e; continue;
     }
     out += c; i++;
@@ -211,7 +244,7 @@ function translate(src, map) {
           if ("([{".includes(ch)) br++; else if (")]}".includes(ch)) br--;
           else if (br === 0 && (ch === ":" || (ch === "!" && inner[t + 1] !== "="))) { cut = t; break; }
         }
-        res += "{" + translate(inner.slice(0, cut), map) + inner.slice(cut) + (d === 0 ? "}" : "");
+        res += "{" + translate(inner.slice(0, cut), map, mmap) + inner.slice(cut) + (d === 0 ? "}" : "");
         k = e; continue;
       }
       res += body[k++];
@@ -229,13 +262,15 @@ function update() {
   const p = PACKS[cur], fwd = $("dir").value === "fwd";
   $("inT").textContent = fwd ? "โค้ดภาษา" + p.name : "โค้ด Python";
   $("outT").textContent = fwd ? "โค้ด Python" : "โค้ดภาษา" + p.name;
-  $("dst").textContent = translate($("src").value, fwd ? p.map : reverse(p.map));
+  $("dst").textContent = translate($("src").value, fwd ? p.map : reverse(p.map), fwd ? (p.methods || {}) : reverse(p.methods || {}));
 }
 
 function drawMap() {
   const box = $("map"); box.textContent = "";
   const g = {};
   for (const k in PACKS[cur].map) (g[PACKS[cur].map[k]] ||= []).push(k);
+  const M = PACKS[cur].methods || {};
+  for (const k in M) (g["." + M[k]] ||= []).push("." + k);
   for (const k in g) {
     const d = document.createElement("div");
     d.append(g[k].join(" / ") + " ");
@@ -249,6 +284,23 @@ $("lang").onchange = () => { cur = $("lang").value; drawMap(); update(); };
 $("dir").onchange = update;
 $("swap").onclick = () => { $("src").value = $("dst").textContent; $("dir").value = $("dir").value === "fwd" ? "rev" : "fwd"; update(); };
 $("src").oninput = update;
+// เยื้องบรรทัดให้อัตโนมัติ: Enter หลังบรรทัดที่ลงท้ายด้วย : จะเยื้องเพิ่ม 4 ช่อง, Tab ใส่ช่องว่าง 4 ช่อง
+$("src").addEventListener("keydown", e => {
+  if (e.isComposing) return;
+  const t = e.target, s = t.selectionStart, v = t.value;
+  const ins = txt => { if (!document.execCommand("insertText", false, txt)) t.setRangeText(txt, t.selectionStart, t.selectionEnd, "end"); update(); };
+  if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    const ls = s === 0 ? 0 : v.lastIndexOf("\n", s - 1) + 1;
+    const before = v.slice(ls, s);
+    let ind = before.match(/^[ \t]*/)[0];
+    const w0 = before.trim().split(/[\s(]/)[0];
+    if (["return", "pass", "break", "continue", "raise"].includes(PACKS[cur].map[w0] || w0) && ind.length >= 4) ind = ind.slice(0, -4);
+    e.preventDefault();
+    ins("\n" + ind + (/:\s*$/.test(before) ? "    " : ""));
+  } else if (e.key === "Tab" && !e.shiftKey) {
+    e.preventDefault(); ins("    ");
+  }
+});
 $("copy").onclick = async () => {
   try { await navigator.clipboard.writeText($("dst").textContent); $("copy").textContent = "คัดลอกแล้ว"; }
   catch (e) { $("copy").textContent = "คัดลอกไม่ได้"; }
