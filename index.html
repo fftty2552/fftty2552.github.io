@@ -47,6 +47,7 @@ summary{cursor:pointer;font-weight:600}
 <p class="sub">this is a project</p>
 
 <div class="bar">
+  <label>แปลงเป็น <select id="tgt"><option value="py">Python</option><option value="c">C</option></select></label>
   <label>ภาษา <select id="lang"></select></label>
   <label>ทิศทาง
     <select id="dir">
@@ -198,15 +199,33 @@ PACKS.th.methods = {
   "อ่าน":"read","เขียน":"write","อ่านบรรทัด":"readline","อ่านทุกบรรทัด":"readlines","ปิด":"close"
 };
 
+PACKS.th.c = { map: {
+  "ถ้า":"if","หาก":"if","มิฉะนั้น":"else","ไม่งั้น":"else","สำหรับ":"for","วนซ้ำ":"for","ขณะที่":"while","ทำ":"do",
+  "สลับ":"switch","กรณี":"case","กรณีอื่น":"default","หยุด":"break","ต่อ":"continue","คืนค่า":"return","ไปที่":"goto",
+  "จำนวนเต็ม":"int","ทศนิยม":"float","ทศนิยมคู่":"double","อักขระ":"char","ว่างเปล่า":"void","ยาว":"long","สั้น":"short",
+  "มีเครื่องหมาย":"signed","ไม่มีเครื่องหมาย":"unsigned","บูล":"bool",
+  "โครงสร้าง":"struct","ยูเนียน":"union","ชุดค่า":"enum","กำหนดชนิด":"typedef","ค่าคงที่":"const","สถิต":"static","ภายนอก":"extern","ขนาดของ":"sizeof",
+  "นำเข้า":"include","กำหนด":"define",
+  "หลัก":"main","พิมพ์":"printf","ปริ้น":"printf","ปริ้นท์":"printf","แสดง":"printf","รับค่า":"scanf","พิมพ์บรรทัด":"puts",
+  "รับอักขระ":"getchar","พิมพ์อักขระ":"putchar","จองหน่วยความจำ":"malloc","คืนหน่วยความจำ":"free",
+  "ความยาวข้อความ":"strlen","คัดลอกข้อความ":"strcpy","เทียบข้อความ":"strcmp","เปิดไฟล์":"fopen","ปิดไฟล์":"fclose","ออก":"exit",
+  "ว่าง":"NULL","จริง":"true","เท็จ":"false","แปลงเป็นจำนวนเต็ม":"atoi","ค่าสัมบูรณ์":"abs","รากที่สอง":"sqrt","ยกกำลัง":"pow"
+} };
+
 const IDENT = /[\p{L}_][\p{L}\p{M}\p{N}_]*/uy;
 
 // แปลง NAME token เท่านั้น ไม่แตะ string/comment (นิพจน์ใน f-string จะถูกแปลด้วย)
-function translate(src, map, mmap) {
+function translate(src, map, mmap, lang) {
   let out = "", i = 0;
   const n = src.length;
   while (i < n) {
     const c = src[i];
-    if (c === "#") {
+    if (lang === "c" && c === "/" && (src[i + 1] === "/" || src[i + 1] === "*")) {
+      let j = src[i + 1] === "/" ? src.indexOf("\n", i) : src.indexOf("*/", i + 2);
+      if (j < 0) j = n; else if (src[i + 1] === "*") j += 2;
+      out += src.slice(i, j); i = j; continue;
+    }
+    if (lang !== "c" && c === "#") {
       let j = src.indexOf("\n", i); if (j < 0) j = n;
       out += src.slice(i, j); i = j; continue;
     }
@@ -474,18 +493,82 @@ function runChecks(py, p, fwd) {
             .sort((a, b) => a.line - b.line);
 }
 
+function checkC(src, nat) {
+  const errs = [], add = (line, level, msg) => errs.push({ line, level, msg });
+  const nm = k => nat[k] ? `${nat[k]} (${k})` : k;
+  const lines = src.split("\n").map(l => l.replace(/\r$/, ""));
+  const closeOf = { ")": "(", "]": "[", "}": "{" };
+  const stack = [], clean = [];
+  let inBlock = false, blockLine = 0;
+  lines.forEach((L, ln) => {
+    let code = "", i = 0;
+    while (i < L.length) {
+      if (inBlock) { const k = L.indexOf("*/", i); if (k < 0) { i = L.length; break; } i = k + 2; inBlock = false; code += " "; continue; }
+      const c = L[i];
+      if (c === "/" && L[i + 1] === "/") break;
+      if (c === "/" && L[i + 1] === "*") { inBlock = true; blockLine = ln + 1; i += 2; continue; }
+      if (c === '"' || c === "'") {
+        let j = i + 1;
+        while (j < L.length && L[j] !== c) { if (L[j] === "\\") j++; j++; }
+        if (j >= L.length) { add(ln + 1, "error", `${c === '"' ? "ข้อความ" : "อักขระ"}เปิดด้วย ${c} แล้วไม่ได้ปิด`); i = L.length; break; }
+        code += c === '"' ? '""' : "''"; i = j + 1; continue;
+      }
+      if ("([{".includes(c)) stack.push({ ch: c, line: ln + 1 });
+      else if (")]}".includes(c)) {
+        const top = stack.pop();
+        if (!top) add(ln + 1, "error", `มี ${c} ปิดเกินโดยไม่มีตัวเปิดคู่กัน`);
+        else if (top.ch !== closeOf[c]) add(ln + 1, "error", `${c} ไม่ตรงคู่กับ ${top.ch} ที่เปิดไว้ในบรรทัด ${top.line}`);
+      }
+      code += c; i++;
+    }
+    clean.push(code);
+  });
+  if (inBlock) add(blockLine, "error", "คอมเมนต์ /* เปิดไว้แต่ไม่ได้ปิดด้วย */");
+  stack.forEach(b => add(b.line, "error", `เปิด ${b.ch} ไว้แต่ไม่ได้ปิด`));
+
+  let pd = 0;
+  clean.forEach((code, ln) => {
+    const t = code.trim();
+    // if / while / switch / for ต้องตามด้วย ( )
+    for (const m of t.matchAll(/(?<![\p{L}\p{N}_])(if|while|switch|for)(?![\p{L}\p{N}_])\s*(\S?)/gu)) {
+      if (m[2] !== "(") add(ln + 1, "error", `${nm(m[1])} ต้องตามด้วยวงเล็บเงื่อนไข เช่น ${m[1]} (...)`);
+      else if (m[1] !== "for") {
+        const st = m.index + m[0].length - 1; let d = 0;
+        for (let k = st; k < t.length; k++) {
+          const ch = t[k];
+          if (ch === "(") d++; else if (ch === ")") { d--; if (d === 0) break; }
+          else if (d === 1 && ch === "=" && !"=!<>".includes(t[k - 1] || " ") && t[k + 1] !== "=") { add(ln + 1, "warn", `เงื่อนไขของ ${nm(m[1])} ใช้ = (กำหนดค่า) ตั้งใจใช้ == (เปรียบเทียบ) หรือไม่`); break; }
+        }
+      }
+    }
+    const startPd = pd;
+    for (const ch of t) { if (ch === "(" || ch === "[") pd++; else if (ch === ")" || ch === "]") pd = Math.max(0, pd - 1); }
+    if (!t || t.startsWith("#") || pd !== 0 || startPd !== 0) return;
+    // ลืม ; ท้ายคำสั่ง (ตรวจแบบระวัง เพื่อไม่ให้เตือนเกิน)
+    if (/[;{},:\\+\-*\/%&|^=<>?!(]$/.test(t)) return;
+    if (/^(if|for|while|switch)\b/.test(t.replace(/^\}\s*(else\s+)?/, "")) || /(^|[^\p{L}\p{N}_])(else|do)$/u.test(t)) return;
+    let nx = ""; for (let k = ln + 1; k < clean.length; k++) { if (clean[k].trim()) { nx = clean[k].trim(); break; } }
+    if (/^[{+\-*\/%&|^=<>?.:)]/.test(nx)) return;
+    add(ln + 1, "warn", "บรรทัดนี้น่าจะลืม ; ท้ายคำสั่ง");
+  });
+  return errs.sort((a, b) => a.line - b.line);
+}
+
 const $ = id => document.getElementById(id);
 let cur = "th";
 
 function reverse(map) { const r = {}; for (const k in map) if (!(map[k] in r)) r[map[k]] = k; return r; }
 
 function update() {
-  const p = PACKS[cur], fwd = $("dir").value === "fwd";
-  $("inT").textContent = fwd ? "โค้ดภาษา" + p.name : "โค้ด Python";
-  $("outT").textContent = fwd ? "โค้ด Python" : "โค้ดภาษา" + p.name;
-  const res = translate($("src").value, fwd ? p.map : reverse(p.map), fwd ? (p.methods || {}) : reverse(p.methods || {}));
+  const isC = $("tgt").value === "c", base = PACKS[cur], tn = isC ? "C" : "Python";
+  const p = isC ? (base.c ? { name: base.name, map: base.c.map, methods: {} } : null) : base, fwd = $("dir").value === "fwd";
+  $("dir").options[0].textContent = "ภาษา → " + tn; $("dir").options[1].textContent = tn + " → ภาษา";
+  if (!p) { $("dst").textContent = "ยังไม่มีชุดคำสั่ง C สำหรับภาษานี้"; renderCheck([], false); return; }
+  $("inT").textContent = fwd ? "โค้ดภาษา" + p.name : "โค้ด " + tn;
+  $("outT").textContent = fwd ? "โค้ด " + tn : "โค้ดภาษา" + p.name;
+  const res = translate($("src").value, fwd ? p.map : reverse(p.map), fwd ? (p.methods || {}) : reverse(p.methods || {}), isC ? "c" : undefined);
   $("dst").textContent = res;
-  renderCheck(runChecks(fwd ? res : $("src").value, p, fwd), $("src").value.trim() !== "");
+  renderCheck(isC ? checkC(fwd ? res : $("src").value, reverse(p.map)) : runChecks(fwd ? res : $("src").value, p, fwd), $("src").value.trim() !== "");
 }
 
 function renderCheck(errs, hasCode) {
@@ -510,8 +593,9 @@ function goLine(n) {
 function drawMap() {
   const box = $("map"); box.textContent = "";
   const g = {};
-  for (const k in PACKS[cur].map) (g[PACKS[cur].map[k]] ||= []).push(k);
-  const M = PACKS[cur].methods || {};
+  const MP = ($("tgt").value === "c" && PACKS[cur].c) ? PACKS[cur].c.map : PACKS[cur].map;
+  for (const k in MP) (g[MP[k]] ||= []).push(k);
+  const M = $("tgt").value === "c" ? {} : (PACKS[cur].methods || {});
   for (const k in M) (g["." + M[k]] ||= []).push("." + k);
   for (const k in g) {
     const d = document.createElement("div");
@@ -524,6 +608,7 @@ function drawMap() {
 for (const k in PACKS) { const o = document.createElement("option"); o.value = k; o.textContent = PACKS[k].name; $("lang").appendChild(o); }
 $("lang").onchange = () => { cur = $("lang").value; drawMap(); update(); };
 $("dir").onchange = update;
+$("tgt").onchange = () => { drawMap(); update(); };
 $("swap").onclick = () => { $("src").value = $("dst").textContent; $("dir").value = $("dir").value === "fwd" ? "rev" : "fwd"; update(); };
 $("src").oninput = update;
 // เยื้องบรรทัดให้อัตโนมัติ: Enter หลังบรรทัดที่ลงท้ายด้วย : จะเยื้องเพิ่ม 4 ช่อง, Tab ใส่ช่องว่าง 4 ช่อง
@@ -536,9 +621,9 @@ $("src").addEventListener("keydown", e => {
     const before = v.slice(ls, s);
     let ind = before.match(/^[ \t]*/)[0];
     const w0 = before.trim().split(/[\s(]/)[0];
-    if (["return", "pass", "break", "continue", "raise"].includes(PACKS[cur].map[w0] || w0) && ind.length >= 4) ind = ind.slice(0, -4);
+    if (["return", "pass", "break", "continue", "raise"].includes(PACKS[cur].map[w0] || w0) && ind.length >= 4 && $("tgt").value !== "c") ind = ind.slice(0, -4);
     e.preventDefault();
-    ins("\n" + ind + (/:\s*$/.test(before) ? "    " : ""));
+    ins("\n" + ind + (($("tgt").value === "c" ? /\{\s*$/ : /:\s*$/).test(before) ? "    " : ""));
   } else if (e.key === "Tab" && !e.shiftKey) {
     e.preventDefault(); ins("    ");
   }
