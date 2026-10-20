@@ -3,11 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title> เขียนโค้ดด้วยภาษาที่เลือก (beta test)</title></title>
+<title>เขียนโค้ดด้วยภาษาที่เลือก (beta test)</title>
 <style>
 :root{--bg:#faf8f5;--fg:#1f1d1a;--mut:#6b665f;--card:#fff;--bd:#e4dfd7;--ac:#c2410c;--acfg:#fff;--code:#1e1e24;--codefg:#e8e6e3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171614;--fg:#ece8e1;--mut:#9a948a;--card:#211f1c;--bd:#38342f;--ac:#fb923c;--acfg:#1a1209;--code:#0e0e11}}
 :root[data-theme="dark"]{--bg:#171614;--fg:#ece8e1;--mut:#9a948a;--card:#211f1c;--bd:#38342f;--ac:#fb923c;--acfg:#1a1209;--code:#0e0e11}
+:root{--err:#b91c1c;--wrn:#b45309}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--err:#f87171;--wrn:#fbbf24}}
+:root[data-theme="dark"]{--err:#f87171;--wrn:#fbbf24}
+.chk{margin-top:14px;background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+.chk ul{list-style:none;margin:0;padding:4px 0;max-height:220px;overflow:auto}
+.chk li{padding:6px 14px;cursor:pointer;display:flex;gap:12px;font-size:.92rem}
+.chk li:hover{background:var(--bg)}
+.chk .ln{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;min-width:96px;white-space:nowrap;padding-top:2px}
+.chk .e{color:var(--err)}.chk .w{color:var(--wrn)}
+.chk .ft{color:var(--mut);font-size:.82rem;padding:2px 14px 10px}
 *{box-sizing:border-box}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 "Noto Sans Thai","Sarabun",system-ui,sans-serif}
@@ -51,6 +61,8 @@ summary{cursor:pointer;font-weight:600}
   <div class="pane"><div class="hd"><span id="inT">โค้ดภาษาไทย</span></div><textarea id="src" spellcheck="false" placeholder="พิมพ์หรือวางโค้ดที่นี่"></textarea></div>
   <div class="pane"><div class="hd"><span id="outT">โค้ด Python</span><button class="pri" id="copy">คัดลอก</button></div><pre><code id="dst"></code></pre></div>
 </div>
+
+<section class="chk"><div class="hd"><span id="chkT">ตรวจสอบโค้ด</span></div><ul id="chkL"></ul><div class="ft">ตรวจแบบวิเคราะห์โค้ด (โครงสร้าง, ชื่อที่ไม่รู้จัก, คำสั่งสะกดผิด) ยังไม่ใช่การรันโปรแกรมจริง จึงอาจพลาดหรือเตือนเกินบางกรณี คลิกรายการเพื่อไปยังบรรทัดนั้น</div></section>
 
 <p class="note">คัดลอกโค้ดที่แปลงไปใส่ python</p>
 
@@ -253,6 +265,215 @@ function translate(src, map, mmap) {
   }
 }
 
+// ตรวจโครงสร้างโค้ด Python (บรรทัดเท่าเดิมกับต้นฉบับ จึงชี้เลขบรรทัดได้ตรง)
+function check(py, nat) {
+  const errs = [], add = (line, level, msg) => errs.push({ line, level, msg });
+  const nm = k => nat[k] ? `${nat[k]} (${k})` : k;
+  const lines = py.split("\n").map(l => l.replace(/\r$/, ""));
+  const closeOf = { ")": "(", "]": "[", "}": "{" };
+  const stack = [], info = [];
+  let triple = null, tripleLine = 0, bs = false;
+  lines.forEach((L, ln) => {
+    const cont = stack.length > 0 || triple !== null || bs;
+    let code = "", i = 0;
+    while (i < L.length) {
+      if (triple) { const k = L.indexOf(triple, i); if (k < 0) { i = L.length; break; } i = k + 3; triple = null; code += '""'; continue; }
+      const c = L[i];
+      if (c === "#") break;
+      if (c === '"' || c === "'") {
+        if (L.startsWith(c.repeat(3), i)) { triple = c.repeat(3); tripleLine = ln + 1; i += 3; continue; }
+        let j = i + 1;
+        while (j < L.length && L[j] !== c) { if (L[j] === "\\") j++; j++; }
+        if (j >= L.length) { add(ln + 1, "error", `ข้อความเปิดด้วย ${c} แล้วไม่ได้ปิดในบรรทัดเดียวกัน`); i = L.length; break; }
+        code += '""'; i = j + 1; continue;
+      }
+      if ("([{".includes(c)) stack.push({ ch: c, line: ln + 1 });
+      else if (")]}".includes(c)) {
+        const top = stack.pop();
+        if (!top) add(ln + 1, "error", `มี ${c} ปิดเกินโดยไม่มีตัวเปิดคู่กัน`);
+        else if (top.ch !== closeOf[c]) add(ln + 1, "error", `${c} ไม่ตรงคู่กับ ${top.ch} ที่เปิดไว้ในบรรทัด ${top.line}`);
+      }
+      code += c; i++;
+    }
+    bs = triple === null && /\\\s*$/.test(code);
+    info.push({ code, cont });
+  });
+  if (triple) add(tripleLine, "error", "ข้อความสามคำพูดเปิดไว้แต่ไม่ได้ปิด");
+  stack.forEach(b => add(b.line, "error", `เปิด ${b.ch} ไว้แต่ไม่ได้ปิด`));
+
+  const BLOCK = ["if", "elif", "else", "for", "while", "def", "class", "try", "except", "finally", "with"];
+  const AFTER = { elif: ["if", "elif"], else: ["if", "elif", "for", "while", "try", "except"], except: ["try", "except"], finally: ["try", "except", "else"] };
+  const levels = [0], kinds = [""], last = {};
+  let pending = null;
+  lines.forEach((raw, ln) => {
+    const { code, cont } = info[ln], t = code.trim();
+    if (cont || !t) return;
+    const lead = raw.match(/^[ \t]*/)[0];
+    if (lead.includes("\t") && lead.includes(" ")) add(ln + 1, "warn", "ใช้ Tab ปนกับช่องว่างในการเยื้อง ควรใช้ช่องว่าง 4 ช่องอย่างเดียว");
+    const ind = lead.replace(/\t/g, "    ").length;
+    const kw = (t.match(/^[A-Za-z_]+/) || [""])[0];
+    if (pending) {
+      if (ind > pending.ind) { levels.push(ind); kinds.push(pending.kw); }
+      else add(pending.line, "error", `${nm(pending.kw)} ลงท้ายด้วย : แล้ว แต่บรรทัดถัดไปไม่ได้เยื้องเข้าไปเป็นเนื้อหาของบล็อก`);
+      pending = null;
+    } else if (ind > levels[levels.length - 1]) {
+      add(ln + 1, "error", "เยื้องเกินมา ทั้งที่บรรทัดก่อนหน้าไม่ได้เปิดบล็อก");
+      levels.push(ind); kinds.push("");
+    }
+    while (levels.length > 1 && ind < levels[levels.length - 1]) { levels.pop(); kinds.pop(); }
+    if (ind !== levels[levels.length - 1]) { add(ln + 1, "error", "ระดับการเยื้องไม่ตรงกับบล็อกใดๆ ก่อนหน้า"); levels.push(ind); kinds.push(""); }
+    Object.keys(last).forEach(k => { if (+k > ind) delete last[k]; });
+    if (AFTER[kw] && !AFTER[kw].includes(last[ind])) add(ln + 1, "error", `${nm(kw)} ต้องอยู่ต่อจากบล็อก ${AFTER[kw].map(nm).join(" / ")} ที่เยื้องระดับเดียวกัน`);
+    last[ind] = kw;
+    if (["return", "yield"].includes(kw) && !kinds.includes("def")) add(ln + 1, "error", `${nm(kw)} ใช้ได้เฉพาะภายในฟังก์ชัน`);
+    if (["break", "continue"].includes(kw)) {
+      let ok = false;
+      for (let q = kinds.length - 1; q >= 0; q--) { if (["for", "while"].includes(kinds[q])) { ok = true; break; } if (["def", "class"].includes(kinds[q])) break; }
+      if (!ok) add(ln + 1, "error", `${nm(kw)} ใช้ได้เฉพาะภายในลูป (for / while)`);
+    }
+    if (BLOCK.includes(kw)) {
+      let d = 0, colon = -1;
+      for (let k = 0; k < t.length; k++) {
+        const ch = t[k];
+        if ("([{".includes(ch)) d++; else if (")]}".includes(ch)) d--;
+        else if (ch === ":" && d === 0 && t[k + 1] !== "=") { colon = k; break; }
+      }
+      if (colon < 0) add(ln + 1, "error", `${nm(kw)} ต้องลงท้ายด้วยเครื่องหมาย :`);
+      else {
+        if (!t.slice(colon + 1).trim()) pending = { line: ln + 1, ind, kw };
+        if (["if", "elif", "while"].includes(kw)) {
+          const seg = t.slice(kw.length, colon); let dd = 0;
+          for (let k = 0; k < seg.length; k++) {
+            const ch = seg[k];
+            if ("([{".includes(ch)) dd++; else if (")]}".includes(ch)) dd--;
+            else if (dd === 0 && ch === "=" && !"=!<>:".includes(seg[k - 1] || " ") && seg[k + 1] !== "=") {
+              add(ln + 1, "warn", `เงื่อนไขของ ${nm(kw)} ใช้ = (กำหนดค่า) ตั้งใจใช้ == (เปรียบเทียบ) หรือไม่`); break;
+            }
+          }
+        }
+      }
+    }
+  });
+  if (pending) add(pending.line, "error", `${nm(pending.kw)} ลงท้ายด้วย : แล้ว แต่ไม่มีเนื้อหาของบล็อกต่อท้าย`);
+  errs.sort((a, b) => a.line - b.line); errs.info = info; return errs;
+}
+
+function lev(a, b) {
+  a = Array.from(a); b = Array.from(b);
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return dp[a.length][b.length];
+}
+
+const PYKW = new Set(["False","None","True","and","as","assert","async","await","break","class","continue","def","del","elif","else","except","finally","for","from","global","if","import","in","is","lambda","nonlocal","not","or","pass","raise","return","try","while","with","yield"]);
+const EXTRA_BI = ["__name__","__file__","__doc__","__import__","NotImplemented","Ellipsis","BaseException","ArithmeticError","LookupError","OverflowError","EOFError","IOError","NotImplementedError","RecursionError","SystemExit","ModuleNotFoundError","PermissionError","UnicodeError","IndentationError","SyntaxError","MemoryError","TimeoutError","memoryview","breakpoint","aiter","anext","exit","quit"];
+
+function check2(info, nat, cands, bi) {
+  const errs = [], add = (line, msg) => errs.push({ line, level: "error", msg });
+  const nm = k => nat[k] ? `${nat[k]} (${k})` : k;
+  const TOK = /[\p{L}_][\p{L}\p{M}\p{N}_]*|0[xXoObB][0-9a-fA-F_]+|\d[\d_]*(?:\.\d*)?(?:[eE][+-]?\d+)?[jJ]?|\.\d+|""|\*\*=|\/\/=|>>=|<<=|\*\*|\/\/|->|:=|==|!=|<=|>=|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|@=|[^\s]/gu;
+  const toks = [], lineToks = [], endDepth = [];
+  let depth = 0;
+  info.forEach(({ code }, ln) => {
+    const mine = []; TOK.lastIndex = 0; let m;
+    while ((m = TOK.exec(code))) {
+      const w = m[0];
+      if (/^[rRbBfFuU]{1,2}$/.test(w) && code.startsWith('""', TOK.lastIndex)) continue;
+      let k = "op";
+      if (/^[\p{L}_]/u.test(w)) k = PYKW.has(w) ? "kw" : "id";
+      else if (w === '""') k = "str";
+      else if (/^[\d.]/.test(w) && /\d/.test(w)) k = "num";
+      const open = w.length === 1 && "([{".includes(w), close = w.length === 1 && ")]}".includes(w);
+      if (close) depth = Math.max(0, depth - 1);
+      const tk = { w, k, ln, d: depth };
+      if (open) depth++;
+      toks.push(tk); mine.push(tk);
+    }
+    lineToks.push(mine); endDepth.push(depth);
+  });
+
+  // 1) ชื่อที่ถูกกำหนดในโค้ด
+  const defined = new Set(); let star = false;
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i], nx = toks[i + 1];
+    if ((t.w === "def" || t.w === "class") && nx && nx.k === "id") {
+      defined.add(nx.w);
+      if (t.w === "def" && toks[i + 2] && toks[i + 2].w === "(") {
+        const d0 = toks[i + 2].d; let j = i + 3;
+        while (j < toks.length && !(toks[j].w === ")" && toks[j].d === d0)) { if (toks[j].k === "id") defined.add(toks[j].w); j++; }
+      }
+    } else if (t.w === "for") {
+      let j = i + 1;
+      while (j < toks.length && !(toks[j].w === "in" && toks[j].d === t.d) && toks[j].ln - t.ln < 2) { if (toks[j].k === "id") defined.add(toks[j].w); j++; }
+    } else if (t.w === "as" && nx && nx.k === "id") defined.add(nx.w);
+    else if (["import", "from", "global", "nonlocal"].includes(t.w)) {
+      for (let j = i + 1; j < toks.length && toks[j].ln === t.ln; j++) { if (toks[j].k === "id") defined.add(toks[j].w); if (toks[j].w === "*") star = true; }
+    } else if (t.w === "lambda") {
+      let j = i + 1;
+      while (j < toks.length && toks[j].ln === t.ln && !(toks[j].w === ":" && toks[j].d === t.d)) { if (toks[j].k === "id") defined.add(toks[j].w); j++; }
+    } else if (t.w === ":=" && toks[i - 1] && toks[i - 1].k === "id") defined.add(toks[i - 1].w);
+    else if (t.w === "=" && t.d === 0) {
+      for (let j = i - 1; j >= 0 && toks[j].ln === t.ln; j--) if (toks[j].k === "id") defined.add(toks[j].w);
+    }
+  }
+
+  // 2) ชื่อที่ไม่รู้จัก (NameError) พร้อมเดาคำที่น่าจะหมายถึง
+  const pool = cands.concat([...defined]), seen = new Set();
+  if (!star) toks.forEach((t, i) => {
+    if (t.k !== "id" || defined.has(t.w) || bi.has(t.w) || t.w === "match" || t.w === "case" || t.w === "_") return;
+    const pv = toks[i - 1], nx = toks[i + 1];
+    if (pv && pv.w === ".") return;
+    if (t.d > 0 && nx && nx.w === "=" && pv && (pv.w === "(" || pv.w === ",")) return;
+    const key = t.ln + ":" + t.w; if (seen.has(key)) return; seen.add(key);
+    const len = Array.from(t.w).length; let best = null, bd = 99;
+    if (len >= 2) for (const c of pool) { const dd = lev(t.w, c); if (dd < bd) { bd = dd; best = c; } }
+    add(t.ln + 1, `ไม่รู้จักชื่อ "${t.w}" (ยังไม่ได้กำหนดค่า/นิยาม หรือสะกดคำสั่งผิด)` + (best && best !== t.w && bd <= (len >= 6 ? 2 : 1) ? ` คุณหมายถึง "${best}" หรือไม่` : ""));
+  });
+
+  // 3) ไวยากรณ์ที่ทำให้ติดแดง
+  const TRAIL = new Set(["+","-","/","//","%","**","=","==","!=","<",">","<=",">=","+=","-=","*=","/=","&","|","^","->","and","or","not","in","is","if","import","from","as"]);
+  const BLOCKS = new Set(["if","elif","else","for","while","def","class","try","except","finally","with","async","match","case"]);
+  lineToks.forEach((L, ln) => {
+    if (!L.length) return;
+    const first = L[0], cont = info[ln].cont, kind = t => t.k === "id" || t.k === "num" || t.k === "str";
+    if (!["match", "case", "type"].includes(first.w)) {
+      for (let q = 0; q + 1 < L.length; q++) {
+        const a = L[q], b = L[q + 1];
+        if (kind(a) && kind(b) && !(a.k === "str" && b.k === "str")) {
+          add(ln + 1, `"${a.k === "str" ? "ข้อความ" : a.w}" ตามด้วย "${b.k === "str" ? "ข้อความ" : b.w}" โดยไม่มีเครื่องหมายหรือคำสั่งคั่น อาจสะกดคำสั่งผิดหรือลืมเครื่องหมาย`); break;
+        }
+      }
+    }
+    for (let q = 0; q + 1 < L.length; q++) if (L[q].k === "kw" && L[q].d === 0 && L[q + 1].w === "=") { add(ln + 1, `${nm(L[q].w)} เป็นคำสงวนของภาษา ใช้เป็นชื่อตัวแปรไม่ได้`); break; }
+    if (endDepth[ln] === 0 && !(info[ln + 1] && info[ln + 1].cont)) {
+      const last = L[L.length - 1];
+      if (TRAIL.has(last.w)) add(ln + 1, `บรรทัดจบด้วย "${last.w}" ค้างอยู่ ยังไม่มีค่าหรือนิพจน์ต่อท้าย`);
+      if (!cont && last.w === ":" && !BLOCKS.has(first.w)) add(ln + 1, "ลงท้ายด้วย : แต่ไม่ใช่คำสั่งเปิดบล็อก (if / for / def ฯลฯ)");
+    }
+    if (cont) return;
+    const w0 = first.w, sec = L[1];
+    if (["else", "try", "finally"].includes(w0) && !(sec && sec.w === ":"))
+      add(ln + 1, `${nm(w0)} ต้องตามด้วย : ทันที ไม่มีเงื่อนไข` + (w0 === "else" && sec && sec.w === "if" ? ` (ถ้าต้องการเงื่อนไขให้ใช้ ${nm("elif")})` : ""));
+    if (["if", "elif", "while"].includes(w0) && sec && sec.w === ":") add(ln + 1, `${nm(w0)} ไม่มีเงื่อนไข`);
+    if (w0 === "def" && !(sec && sec.k === "id" && L[2] && L[2].w === "(")) add(ln + 1, `${nm("def")} ต้องมีชื่อและวงเล็บ เช่น def ชื่อ():`);
+    if (w0 === "for" && !L.some(t => t.w === "in" && t.d === 0)) add(ln + 1, `${nm("for")} ต้องมี ${nm("in")} เช่น for x in รายการ:`);
+  });
+  return errs;
+}
+
+function runChecks(py, p, fwd) {
+  const nat = reverse(p.map);
+  const errs = check(py, nat);
+  const cands = fwd ? Object.keys(p.map).concat(Object.keys(p.methods || {}))
+                    : [...new Set(Object.values(p.map).concat(Object.values(p.methods || {})))];
+  const bi = new Set(Object.values(p.map).concat(EXTRA_BI));
+  const all = errs.concat(check2(errs.info, nat, cands, bi)), seen = new Set();
+  return all.filter(e => { const k = e.line + e.msg; if (seen.has(k)) return false; seen.add(k); return true; })
+            .sort((a, b) => a.line - b.line);
+}
+
 const $ = id => document.getElementById(id);
 let cur = "th";
 
@@ -262,7 +483,28 @@ function update() {
   const p = PACKS[cur], fwd = $("dir").value === "fwd";
   $("inT").textContent = fwd ? "โค้ดภาษา" + p.name : "โค้ด Python";
   $("outT").textContent = fwd ? "โค้ด Python" : "โค้ดภาษา" + p.name;
-  $("dst").textContent = translate($("src").value, fwd ? p.map : reverse(p.map), fwd ? (p.methods || {}) : reverse(p.methods || {}));
+  const res = translate($("src").value, fwd ? p.map : reverse(p.map), fwd ? (p.methods || {}) : reverse(p.methods || {}));
+  $("dst").textContent = res;
+  renderCheck(runChecks(fwd ? res : $("src").value, p, fwd), $("src").value.trim() !== "");
+}
+
+function renderCheck(errs, hasCode) {
+  const ul = $("chkL"); ul.textContent = "";
+  const ne = errs.filter(e => e.level === "error").length, nw = errs.length - ne;
+  $("chkT").textContent = !hasCode ? "ตรวจสอบโค้ด" : errs.length ? `ตรวจสอบโค้ด: พบ ${ne} ข้อผิดพลาด, ${nw} คำเตือน` : "ตรวจสอบโค้ด: ไม่พบข้อผิดพลาดที่ตรวจได้ ✓";
+  if (!hasCode) { const li = document.createElement("li"); li.style.cursor = "default"; li.textContent = "พิมพ์โค้ดเพื่อเริ่มตรวจ"; ul.appendChild(li); return; }
+  errs.forEach(e => {
+    const li = document.createElement("li");
+    const a = document.createElement("span"); a.className = "ln " + (e.level === "error" ? "e" : "w");
+    a.textContent = (e.level === "error" ? "ผิด" : "เตือน") + " · บรรทัด " + e.line;
+    const b = document.createElement("span"); b.textContent = e.msg;
+    li.append(a, b); li.onclick = () => goLine(e.line); ul.appendChild(li);
+  });
+}
+function goLine(n) {
+  const t = $("src"), L = t.value.split("\n"); let s = 0;
+  for (let k = 0; k < n - 1; k++) s += L[k].length + 1;
+  t.focus(); t.setSelectionRange(s, s + (L[n - 1] || "").length);
 }
 
 function drawMap() {
